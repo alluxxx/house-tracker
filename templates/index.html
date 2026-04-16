@@ -1,0 +1,220 @@
+<!DOCTYPE html>
+<html lang="fi">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Sundsberg – Asuntohinnat</title>
+  <style>
+    :root {
+      --bg: #f4f6f8;
+      --card: #fff;
+      --border: #e2e8f0;
+      --text: #1a202c;
+      --muted: #718096;
+      --accent: #3182ce;
+      --green: #38a169;
+      --red: #e53e3e;
+    }
+    * { box-sizing: border-box; margin: 0; padding: 0; }
+    body { font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif; background: var(--bg); color: var(--text); }
+    header { background: var(--card); border-bottom: 1px solid var(--border); padding: 1rem 2rem; display: flex; align-items: center; justify-content: space-between; }
+    header h1 { font-size: 1.3rem; font-weight: 700; }
+    header .sub { font-size: 0.8rem; color: var(--muted); }
+    .container { max-width: 1200px; margin: 0 auto; padding: 1.5rem 1rem; }
+
+    /* Stats bar */
+    .stats-grid { display: grid; grid-template-columns: repeat(auto-fit, minmax(160px, 1fr)); gap: 1rem; margin-bottom: 1.5rem; }
+    .stat-card { background: var(--card); border: 1px solid var(--border); border-radius: 10px; padding: 1rem 1.2rem; }
+    .stat-label { font-size: 0.72rem; color: var(--muted); text-transform: uppercase; letter-spacing: .04em; margin-bottom: 0.3rem; }
+    .stat-val { font-size: 1.5rem; font-weight: 700; }
+
+    /* Toolbar */
+    .toolbar { display: flex; gap: 0.75rem; align-items: center; margin-bottom: 1rem; flex-wrap: wrap; }
+    .toolbar input { padding: 0.45rem 0.8rem; border: 1px solid var(--border); border-radius: 6px; font-size: 0.88rem; width: 200px; }
+    .toolbar select { padding: 0.45rem 0.8rem; border: 1px solid var(--border); border-radius: 6px; font-size: 0.88rem; }
+    .btn { padding: 0.45rem 1rem; border-radius: 6px; font-size: 0.85rem; font-weight: 600; cursor: pointer; border: none; }
+    .btn-primary { background: var(--accent); color: #fff; }
+    .btn-primary:hover { opacity: 0.88; }
+    .count-label { font-size: 0.82rem; color: var(--muted); margin-left: auto; }
+
+    /* Table */
+    .table-wrap { background: var(--card); border: 1px solid var(--border); border-radius: 10px; overflow-x: auto; }
+    table { width: 100%; border-collapse: collapse; font-size: 0.86rem; }
+    th { background: var(--bg); padding: 0.65rem 1rem; text-align: left; font-size: 0.75rem; text-transform: uppercase; letter-spacing: .04em; color: var(--muted); border-bottom: 1px solid var(--border); white-space: nowrap; cursor: pointer; user-select: none; }
+    th:hover { color: var(--accent); }
+    td { padding: 0.65rem 1rem; border-bottom: 1px solid var(--border); vertical-align: middle; white-space: nowrap; }
+    tr:last-child td { border-bottom: none; }
+    tr:hover td { background: #f7fafc; }
+    a.listing-link { color: var(--accent); text-decoration: none; font-weight: 600; }
+    a.listing-link:hover { text-decoration: underline; }
+    .badge { display: inline-block; padding: 0.2rem 0.55rem; border-radius: 4px; font-size: 0.72rem; font-weight: 700; }
+    .badge-oikotie { background: #ebf4ff; color: #2b6cb0; }
+    .badge-etuovi  { background: #f0fff4; color: #276749; }
+
+    /* Last runs */
+    .runs-section { margin-top: 1.5rem; }
+    .runs-section h2 { font-size: 0.9rem; font-weight: 700; color: var(--muted); text-transform: uppercase; letter-spacing: .05em; margin-bottom: 0.6rem; }
+    .run-row { font-size: 0.8rem; color: var(--muted); padding: 0.3rem 0; border-bottom: 1px solid var(--border); display: flex; gap: 1.5rem; }
+    .run-ok { color: var(--green); }
+    .run-err { color: var(--red); }
+  </style>
+</head>
+<body>
+<header>
+  <div>
+    <h1>📍 Sundsberg – Asuntohinnat</h1>
+    <div class="sub">Kirkkonummi 02430 · Oikotie + Etuovi · päivitetään päivittäin</div>
+  </div>
+  <button class="btn btn-primary" onclick="scrapeNow()">↻ Päivitä nyt</button>
+</header>
+
+<div class="container">
+
+  <!-- Stats -->
+  <div class="stats-grid">
+    <div class="stat-card">
+      <div class="stat-label">Ilmoituksia nyt</div>
+      <div class="stat-val">{{ stats.active_listings }}</div>
+    </div>
+    <div class="stat-card">
+      <div class="stat-label">Keskim. hinta</div>
+      <div class="stat-val">{{ "{:,}".format(stats.avg_price_eur).replace(",","&thinsp;") | safe if stats.avg_price_eur else "–" }} €</div>
+    </div>
+    <div class="stat-card">
+      <div class="stat-label">Keskim. €/m²</div>
+      <div class="stat-val">{{ "{:,}".format(stats.avg_price_per_m2).replace(",","&thinsp;") | safe if stats.avg_price_per_m2 else "–" }} €</div>
+    </div>
+    <div class="stat-card">
+      <div class="stat-label">Halvin</div>
+      <div class="stat-val">{{ "{:,}".format(stats.min_price_eur).replace(",","&thinsp;") | safe if stats.min_price_eur else "–" }} €</div>
+    </div>
+    <div class="stat-card">
+      <div class="stat-label">Kallein</div>
+      <div class="stat-val">{{ "{:,}".format(stats.max_price_eur).replace(",","&thinsp;") | safe if stats.max_price_eur else "–" }} €</div>
+    </div>
+    <div class="stat-card">
+      <div class="stat-label">Viimeksi haettu</div>
+      <div class="stat-val" style="font-size:0.95rem;">{{ stats.last_scraped_at[:16].replace("T"," ") if stats.last_scraped_at else "–" }}</div>
+    </div>
+  </div>
+
+  <!-- Toolbar -->
+  <div class="toolbar">
+    <input type="text" id="search" placeholder="Hae osoite, tyyppi…" oninput="filterTable()">
+    <select id="srcFilter" onchange="filterTable()">
+      <option value="">Kaikki lähteet</option>
+      <option value="oikotie">Oikotie</option>
+      <option value="etuovi">Etuovi</option>
+    </select>
+    <select id="typeFilter" onchange="filterTable()">
+      <option value="">Kaikki tyypit</option>
+      <option value="kerrostalo">Kerrostalo</option>
+      <option value="rivitalo">Rivitalo</option>
+      <option value="omakotitalo">Omakotitalo</option>
+      <option value="paritalo">Paritalo</option>
+    </select>
+    <span class="count-label" id="countLabel">{{ listings|length }} ilmoitusta</span>
+  </div>
+
+  <!-- Table -->
+  <div class="table-wrap">
+    <table id="listingTable">
+      <thead>
+        <tr>
+          <th onclick="sortTable(0)">Osoite ↕</th>
+          <th onclick="sortTable(1)">Tyyppi ↕</th>
+          <th onclick="sortTable(2)">Huoneet ↕</th>
+          <th onclick="sortTable(3)">m² ↕</th>
+          <th onclick="sortTable(4)">Hinta € ↕</th>
+          <th onclick="sortTable(5)">€/m² ↕</th>
+          <th onclick="sortTable(6)">Velaton € ↕</th>
+          <th onclick="sortTable(7)">Vuosi ↕</th>
+          <th onclick="sortTable(8)">Nähty ↕</th>
+          <th>Lähde</th>
+        </tr>
+      </thead>
+      <tbody>
+        {% for l in listings %}
+        <tr data-src="{{ l.source }}" data-type="{{ l.property_type }}">
+          <td><a class="listing-link" href="{{ l.url }}" target="_blank">{{ l.address or "–" }}</a></td>
+          <td>{{ l.property_type or "–" }}</td>
+          <td>{{ l.rooms or "–" }}</td>
+          <td data-val="{{ l.size_m2 or 0 }}">{{ "%.1f"|format(l.size_m2) if l.size_m2 else "–" }}</td>
+          <td data-val="{{ l.price_eur or 0 }}">{{ "{:,}".format(l.price_eur).replace(",","&thinsp;")|safe if l.price_eur else "–" }} €</td>
+          <td data-val="{{ l.price_per_m2 or 0 }}">{{ "{:,.0f}".format(l.price_per_m2).replace(",","&thinsp;")|safe if l.price_per_m2 else "–" }} €</td>
+          <td data-val="{{ l.debt_free_price_eur or 0 }}">{{ "{:,}".format(l.debt_free_price_eur).replace(",","&thinsp;")|safe if l.debt_free_price_eur else "–" }} €</td>
+          <td>{{ l.year_built or "–" }}</td>
+          <td data-val="{{ l.first_seen_at.isoformat() if l.first_seen_at else '' }}">{{ l.first_seen_at.strftime("%d.%m.%Y") if l.first_seen_at else "–" }}</td>
+          <td><span class="badge badge-{{ l.source }}">{{ l.source }}</span></td>
+        </tr>
+        {% else %}
+        <tr><td colspan="10" style="text-align:center;color:var(--muted);padding:2rem;">Ei ilmoituksia – käynnistä haku yllä olevalla napilla.</td></tr>
+        {% endfor %}
+      </tbody>
+    </table>
+  </div>
+
+  <!-- Last runs -->
+  {% if last_runs %}
+  <div class="runs-section">
+    <h2>Viimeisimmät haut</h2>
+    {% for run in last_runs %}
+    <div class="run-row">
+      <span>{{ run.started_at.strftime("%d.%m.%Y %H:%M") if run.started_at else "–" }}</span>
+      <span>{{ run.source }}</span>
+      {% if run.ok %}
+        <span class="run-ok">✓ +{{ run.new_count }} uutta · {{ run.updated_count }} päivitetty · {{ run.removed_count }} poistunut</span>
+      {% else %}
+        <span class="run-err">✗ {{ run.error or "virhe" }}</span>
+      {% endif %}
+    </div>
+    {% endfor %}
+  </div>
+  {% endif %}
+
+</div>
+
+<script>
+function filterTable() {
+  const q    = document.getElementById("search").value.toLowerCase();
+  const src  = document.getElementById("srcFilter").value;
+  const type = document.getElementById("typeFilter").value;
+  const rows = document.querySelectorAll("#listingTable tbody tr");
+  let visible = 0;
+  rows.forEach(row => {
+    const text = row.textContent.toLowerCase();
+    const matchQ    = !q    || text.includes(q);
+    const matchSrc  = !src  || row.dataset.src  === src;
+    const matchType = !type || row.dataset.type === type;
+    const show = matchQ && matchSrc && matchType;
+    row.style.display = show ? "" : "none";
+    if (show) visible++;
+  });
+  document.getElementById("countLabel").textContent = visible + " ilmoitusta";
+}
+
+let _sortCol = -1, _sortAsc = true;
+function sortTable(col) {
+  _sortAsc = (_sortCol === col) ? !_sortAsc : true;
+  _sortCol = col;
+  const tbody = document.querySelector("#listingTable tbody");
+  const rows  = Array.from(tbody.querySelectorAll("tr"));
+  rows.sort((a, b) => {
+    const tdA = a.cells[col], tdB = b.cells[col];
+    const valA = tdA.dataset.val !== undefined ? tdA.dataset.val : tdA.textContent.trim();
+    const valB = tdB.dataset.val !== undefined ? tdB.dataset.val : tdB.textContent.trim();
+    const numA = parseFloat(valA), numB = parseFloat(valB);
+    if (!isNaN(numA) && !isNaN(numB)) return _sortAsc ? numA - numB : numB - numA;
+    return _sortAsc ? valA.localeCompare(valB, "fi") : valB.localeCompare(valA, "fi");
+  });
+  rows.forEach(r => tbody.appendChild(r));
+}
+
+function scrapeNow() {
+  fetch("/api/scrape", {method: "POST"})
+    .then(() => { alert("Haku käynnistetty — päivitä sivu muutaman sekunnin kuluttua."); })
+    .catch(() => alert("Virhe käynnistyksessä."));
+}
+</script>
+</body>
+</html>
