@@ -258,9 +258,18 @@ def index():
         .order_by(desc(Listing.first_seen_at))
         .all()
     )
+    # Deduplicate: same address + size listed by multiple agents → keep cheapest
+    seen: set = set()
+    deduped = []
+    for l in sorted(active, key=lambda x: (x.price_eur or 0)):
+        key = (l.address, l.size_m2)
+        if key not in seen:
+            seen.add(key)
+            deduped.append(l)
+
     stats = _get_stats()
     last_runs = ScrapeRun.query.order_by(desc(ScrapeRun.started_at)).limit(5).all()
-    return render_template("index.html", listings=active, stats=stats, last_runs=last_runs, now=datetime.utcnow())
+    return render_template("index.html", listings=deduped, stats=stats, last_runs=last_runs, now=datetime.utcnow())
 
 
 @app.route("/api/listings")
