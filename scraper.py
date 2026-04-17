@@ -172,6 +172,52 @@ def _parse_oikotie_card(card, seen: set) -> Optional[dict]:
         return None
 
 
+def _scrape_detail(page, url: str) -> dict:
+    """
+    Visit a single Oikotie listing page and return extra fields:
+    debt_free_price_eur, housing_fee_eur, condition.
+    Returns empty dict on any failure.
+    """
+    try:
+        page.goto(url, wait_until="domcontentloaded", timeout=20000)
+        # Wait for the facts table to appear
+        try:
+            page.wait_for_selector("[class*='info-table'], [class*='details'], dt", timeout=8000)
+        except PlaywrightTimeout:
+            pass
+
+        txt = page.inner_text("body")
+
+        debt_match = re.search(
+            r"[Vv]elaton\s+(?:myyntihinta|hinta)[^\d]*([\d\s]{4,10})\s*€", txt
+        )
+        fee_match = re.search(
+            r"(?:Hoitovastike|Yhtiövastike|Vastike)[^\d]*([\d,]+)\s*€", txt
+        )
+        condition_match = re.search(
+            r"[Kk]unto[^\n]*\n\s*(Erinomainen|Hyvä|Tyydyttävä|Välttävä|Uusi|Uudenveroinen)",
+            txt
+        )
+        # fallback: bare keyword anywhere
+        if not condition_match:
+            condition_match = re.search(
+                r"\b(Erinomainen|Hyvä|Tyydyttävä|Välttävä|Uusi|Uudenveroinen)\b", txt
+            )
+
+        result = {}
+        if debt_match:
+            result["debt_free_price_eur"] = _int(debt_match.group(1))
+        if fee_match:
+            result["housing_fee_eur"] = _float(fee_match.group(1))
+        if condition_match:
+            result["condition"] = condition_match.group(1)
+
+        return result
+    except Exception as exc:
+        log.debug("Detail page error %s: %s", url, exc)
+        return {}
+
+
 def scrape_oikotie() -> list[dict]:
     results = []
 
@@ -213,6 +259,14 @@ def scrape_oikotie() -> list[dict]:
                 page_num += 1
             except Exception:
                 break
+
+        # Enrich each listing with detail-page data
+        detail_page = ctx.new_page()
+        for i, listing in enumerate(results):
+            extra = _scrape_detail(detail_page, listing["url"])
+            listing.update(extra)
+            log.debug("Detail %d/%d %s → %s", i + 1, len(results), listing["external_id"], extra)
+            time.sleep(0.8)
 
         ctx.browser.close()
 
