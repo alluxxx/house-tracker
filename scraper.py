@@ -67,7 +67,10 @@ def _dismiss_consent(page):
 
 
 def _new_browser_context(pw):
-    return pw.chromium.launch(headless=True).new_context(
+    return pw.chromium.launch(
+        headless=True,
+        args=["--no-sandbox", "--disable-dev-shm-usage", "--disable-gpu"],
+    ).new_context(
         locale="fi-FI",
         user_agent=(
             "Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) "
