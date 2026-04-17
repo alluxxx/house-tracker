@@ -4,6 +4,24 @@ from flask_sqlalchemy import SQLAlchemy
 db = SQLAlchemy()
 
 
+class Property(db.Model):
+    """Physical apartment/house — one row per real-world dwelling."""
+    __tablename__ = "properties"
+
+    id                = db.Column(db.Integer, primary_key=True)
+    canonical_address = db.Column(db.String(256))
+    postal_code       = db.Column(db.String(10))
+    city              = db.Column(db.String(64))
+    neighborhood      = db.Column(db.String(64))
+    property_type     = db.Column(db.String(32))
+    size_m2           = db.Column(db.Float)
+    floor             = db.Column(db.String(16))
+    year_built        = db.Column(db.Integer)
+    created_at        = db.Column(db.DateTime, default=datetime.utcnow)
+
+    listings = db.relationship("Listing", backref="property", lazy="dynamic")
+
+
 class Listing(db.Model):
     __tablename__ = "listings"
 
@@ -29,6 +47,7 @@ class Listing(db.Model):
     last_seen_at  = db.Column(db.DateTime, default=datetime.utcnow, onupdate=datetime.utcnow)
     sold_at       = db.Column(db.DateTime)                     # set when listing disappears
     is_active     = db.Column(db.Boolean, default=True, nullable=False)
+    property_id   = db.Column(db.Integer, db.ForeignKey("properties.id"), nullable=True)
 
     __table_args__ = (
         db.UniqueConstraint("source", "external_id", name="uq_source_external_id"),

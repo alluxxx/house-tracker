@@ -29,7 +29,7 @@ if _db_url.startswith("postgres://"):
 app.config["SQLALCHEMY_DATABASE_URI"] = _db_url
 app.config["SQLALCHEMY_TRACK_MODIFICATIONS"] = False
 
-from models import db, Listing, PriceHistory, ScrapeRun  # noqa: E402
+from models import db, Listing, PriceHistory, ScrapeRun, Property  # noqa: E402
 
 db.init_app(app)
 
@@ -102,6 +102,7 @@ def _price_drop_email(listing, old_price: int, new_price: int) -> str:
 
 def run_scrape():
     from scraper import scrape_all
+    from property_matcher import find_or_create_property
     log.info("Scrape started")
     source_results = scrape_all()
 
@@ -137,7 +138,8 @@ def run_scrape():
                 ).first()
 
                 if existing is None:
-                    listing = Listing(**data)
+                    prop = find_or_create_property(db, Property, data)
+                    listing = Listing(**data, property_id=prop.id)
                     db.session.add(listing)
                     db.session.flush()   # saa listing.id käyttöön
                     # Kirjaa aloitushinta historiaan
