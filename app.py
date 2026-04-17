@@ -44,32 +44,29 @@ PRICE_DROP_THRESHOLD = 0.03   # ilmoita jos hinta laskee yli 3 %
 
 
 def _send_notification(subject: str, body_html: str):
-    """Lähetä sähköposti ADMIN_EMAIL:iin jos SMTP on konfiguroitu."""
-    admin = os.environ.get("ADMIN_EMAIL")
-    smtp_host = os.environ.get("SMTP_HOST")
-    smtp_user = os.environ.get("SMTP_USER")
-    smtp_pass = os.environ.get("SMTP_PASS")
-    smtp_port = int(os.environ.get("SMTP_PORT", "587"))
+    """Lähetä sähköposti ADMIN_EMAIL:iin Resend-palvelun kautta."""
+    import requests as _requests
 
-    if not all([admin, smtp_host, smtp_user, smtp_pass]):
-        log.debug("SMTP ei konfiguroitu, ohitetaan ilmoitus: %s", subject)
+    admin = os.environ.get("ADMIN_EMAIL")
+    api_key = os.environ.get("RESEND_API_KEY")
+
+    if not all([admin, api_key]):
+        log.debug("Resend ei konfiguroitu, ohitetaan ilmoitus: %s", subject)
         return
 
-    import smtplib
-    from email.mime.multipart import MIMEMultipart
-    from email.mime.text import MIMEText
-
-    msg = MIMEMultipart("alternative")
-    msg["Subject"] = subject
-    msg["From"] = smtp_user
-    msg["To"] = admin
-    msg.attach(MIMEText(body_html, "html"))
-
     try:
-        with smtplib.SMTP(smtp_host, smtp_port) as s:
-            s.starttls()
-            s.login(smtp_user, smtp_pass)
-            s.sendmail(smtp_user, admin, msg.as_string())
+        resp = _requests.post(
+            "https://api.resend.com/emails",
+            headers={"Authorization": f"Bearer {api_key}", "Content-Type": "application/json"},
+            json={
+                "from": "House Tracker <onboarding@resend.dev>",
+                "to": [admin],
+                "subject": subject,
+                "html": body_html,
+            },
+            timeout=10,
+        )
+        resp.raise_for_status()
         log.info("Ilmoitus lähetetty: %s", subject)
     except Exception as exc:
         log.error("Sähköpostin lähetys epäonnistui: %s", exc)
