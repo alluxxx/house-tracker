@@ -50,6 +50,12 @@
     .badge { display: inline-block; padding: 0.2rem 0.55rem; border-radius: 4px; font-size: 0.72rem; font-weight: 700; }
     .badge-oikotie { background: #ebf4ff; color: #2b6cb0; }
     .badge-etuovi  { background: #f0fff4; color: #276749; }
+    .price-drop { color: var(--red); font-weight: 700; }
+    .price-history { font-size: 0.72rem; color: var(--muted); display: block; margin-top: 2px; }
+    .days-on-market { font-size: 0.78rem; }
+    .dom-hot  { color: var(--green); font-weight: 600; }  /* alle 14pv */
+    .dom-warn { color: #d69e2e; font-weight: 600; }       /* 14-60pv */
+    .dom-cold { color: var(--muted); }                    /* yli 60pv */
 
     /* Last runs */
     .runs-section { margin-top: 1.5rem; }
@@ -129,22 +135,36 @@
           <th onclick="sortTable(5)">€/m² ↕</th>
           <th onclick="sortTable(6)">Velaton € ↕</th>
           <th onclick="sortTable(7)">Vuosi ↕</th>
-          <th onclick="sortTable(8)">Nähty ↕</th>
+          <th onclick="sortTable(8)">Markkinoilla ↕</th>
           <th>Lähde</th>
         </tr>
       </thead>
       <tbody>
         {% for l in listings %}
+        {% set days_on = ((now - l.first_seen_at).days) if l.first_seen_at else 0 %}
+        {% set prev_price = l.price_history[-2].price_eur if l.price_history|length >= 2 else None %}
+        {% set price_dropped = prev_price and l.price_eur and l.price_eur < prev_price %}
         <tr data-src="{{ l.source }}" data-type="{{ l.property_type }}">
           <td><a class="listing-link" href="{{ l.url }}" target="_blank">{{ l.address or "–" }}</a></td>
           <td>{{ l.property_type or "–" }}</td>
           <td>{{ l.rooms or "–" }}</td>
           <td data-val="{{ l.size_m2 or 0 }}">{{ "%.1f"|format(l.size_m2) if l.size_m2 else "–" }}</td>
-          <td data-val="{{ l.price_eur or 0 }}">{{ "{:,}".format(l.price_eur).replace(",","&thinsp;")|safe if l.price_eur else "–" }} €</td>
+          <td data-val="{{ l.price_eur or 0 }}">
+            {% if price_dropped %}
+              <span class="price-drop">{{ "{:,}".format(l.price_eur).replace(",","&thinsp;")|safe }} € ↓</span>
+              <span class="price-history">oli {{ "{:,}".format(prev_price).replace(",","&thinsp;")|safe }} €</span>
+            {% else %}
+              {{ "{:,}".format(l.price_eur).replace(",","&thinsp;")|safe if l.price_eur else "–" }} €
+            {% endif %}
+          </td>
           <td data-val="{{ l.price_per_m2 or 0 }}">{{ "{:,.0f}".format(l.price_per_m2).replace(",","&thinsp;")|safe if l.price_per_m2 else "–" }} €</td>
           <td data-val="{{ l.debt_free_price_eur or 0 }}">{{ "{:,}".format(l.debt_free_price_eur).replace(",","&thinsp;")|safe if l.debt_free_price_eur else "–" }} €</td>
           <td>{{ l.year_built or "–" }}</td>
-          <td data-val="{{ l.first_seen_at.isoformat() if l.first_seen_at else '' }}">{{ l.first_seen_at.strftime("%d.%m.%Y") if l.first_seen_at else "–" }}</td>
+          <td data-val="{{ days_on }}">
+            <span class="days-on-market {% if days_on <= 14 %}dom-hot{% elif days_on <= 60 %}dom-warn{% else %}dom-cold{% endif %}">
+              {{ days_on }} pv
+            </span>
+          </td>
           <td><span class="badge badge-{{ l.source }}">{{ l.source }}</span></td>
         </tr>
         {% else %}

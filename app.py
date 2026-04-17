@@ -8,6 +8,7 @@ from dotenv import load_dotenv
 from flask import Flask, jsonify, render_template
 from apscheduler.schedulers.background import BackgroundScheduler
 from sqlalchemy import desc, func
+from sqlalchemy.orm import subqueryload
 
 load_dotenv()
 
@@ -28,7 +29,7 @@ if _db_url.startswith("postgres://"):
 app.config["SQLALCHEMY_DATABASE_URI"] = _db_url
 app.config["SQLALCHEMY_TRACK_MODIFICATIONS"] = False
 
-from models import db, Listing, ScrapeRun  # noqa: E402
+from models import db, Listing, PriceHistory, ScrapeRun  # noqa: E402
 
 db.init_app(app)
 
@@ -38,6 +39,66 @@ with app.app_context():
 # ---------------------------------------------------------------------------
 # Scrape job
 # ---------------------------------------------------------------------------
+
+PRICE_DROP_THRESHOLD = 0.03   # ilmoita jos hinta laskee yli 3 %
+
+
+def _send_notification(subject: str, body_html: str):
+    """Lähetä sähköposti ADMIN_EMAIL:iin jos SMTP on konfiguroitu."""
+    admin = os.environ.get("ADMIN_EMAIL")
+    smtp_host = os.environ.get("SMTP_HOST")
+    smtp_user = os.environ.get("SMTP_USER")
+    smtp_pass = os.environ.get("SMTP_PASS")
+    smtp_port = int(os.environ.get("SMTP_PORT", "587"))
+
+    if not all([admin, smtp_host, smtp_user, smtp_pass]):
+        log.debug("SMTP ei konfiguroitu, ohitetaan ilmoitus: %s", subject)
+        return
+
+    import smtplib
+    from email.mime.multipart import MIMEMultipart
+    from email.mime.text import MIMEText
+
+    msg = MIMEMultipart("alternative")
+    msg["Subject"] = subject
+    msg["From"] = smtp_user
+    msg["To"] = admin
+    msg.attach(MIMEText(body_html, "html"))
+
+    try:
+        with smtplib.SMTP(smtp_host, smtp_port) as s:
+            s.starttls()
+            s.login(smtp_user, smtp_pass)
+            s.sendmail(smtp_user, admin, msg.as_string())
+        log.info("Ilmoitus lähetetty: %s", subject)
+    except Exception as exc:
+        log.error("Sähköpostin lähetys epäonnistui: %s", exc)
+
+
+def _new_listing_email(listings: list) -> str:
+    rows = "".join(
+        f"<tr><td><a href='{l.url}'>{l.address}</a></td>"
+        f"<td>{l.price_eur:,} €</td>"
+        f"<td>{l.size_m2 or '–'} m²</td>"
+        f"<td>{l.property_type or '–'}</td>"
+        f"<td>{l.year_built or '–'}</td></tr>"
+        for l in listings
+    )
+    return f"""<h2>🏠 {len(listings)} uusi asuntoilmoitus Sundssbergissä</h2>
+<table border='1' cellpadding='6' style='border-collapse:collapse;font-family:sans-serif'>
+<tr><th>Osoite</th><th>Hinta</th><th>Koko</th><th>Tyyppi</th><th>Vuosi</th></tr>
+{rows}
+</table>"""
+
+
+def _price_drop_email(listing, old_price: int, new_price: int) -> str:
+    drop_pct = (old_price - new_price) / old_price * 100
+    return f"""<h2>📉 Hinta laskenut {drop_pct:.1f}% — {listing.address}</h2>
+<p><b>Vanha hinta:</b> {old_price:,} €<br>
+<b>Uusi hinta:</b> {new_price:,} €<br>
+<b>Lasku:</b> {old_price - new_price:,} €</p>
+<p><a href='{listing.url}'>Katso ilmoitus →</a></p>"""
+
 
 def run_scrape():
     from scraper import scrape_all
@@ -56,7 +117,6 @@ def run_scrape():
                 db.session.commit()
                 continue
 
-            # IDs currently active in DB for this source
             active_ids = {
                 row[0]
                 for row in db.session.query(Listing.external_id)
@@ -64,7 +124,8 @@ def run_scrape():
                              .all()
             }
             scraped_ids = set()
-
+            new_listings = []
+            price_drops = []
             new_count = updated_count = 0
 
             for data in listings:
@@ -78,8 +139,31 @@ def run_scrape():
                 if existing is None:
                     listing = Listing(**data)
                     db.session.add(listing)
+                    db.session.flush()   # saa listing.id käyttöön
+                    # Kirjaa aloitushinta historiaan
+                    if listing.price_eur:
+                        db.session.add(PriceHistory(
+                            listing_id=listing.id,
+                            price_eur=listing.price_eur,
+                        ))
+                    new_listings.append(listing)
                     new_count += 1
                 else:
+                    new_price = data.get("price_eur")
+                    old_price = existing.price_eur
+
+                    # Hintahistoria — kirjaa jos hinta muuttui
+                    if new_price and new_price != old_price:
+                        db.session.add(PriceHistory(
+                            listing_id=existing.id,
+                            price_eur=new_price,
+                        ))
+                        # Tarkista onko lasku yli kynnysarvon
+                        if old_price and new_price < old_price:
+                            drop = (old_price - new_price) / old_price
+                            if drop >= PRICE_DROP_THRESHOLD:
+                                price_drops.append((existing, old_price, new_price))
+
                     changed = False
                     for key, val in data.items():
                         if getattr(existing, key) != val:
@@ -90,7 +174,7 @@ def run_scrape():
                     if changed:
                         updated_count += 1
 
-            # Mark listings no longer in results as sold/removed
+            # Merkitse poistuneet myydyiksi
             removed_ids = active_ids - scraped_ids
             removed_count = 0
             for ext_id in removed_ids:
@@ -111,6 +195,19 @@ def run_scrape():
                 "%s: +%d new, %d updated, %d removed",
                 source, new_count, updated_count, removed_count,
             )
+
+            # Sähköposti-ilmoitukset
+            if new_listings:
+                _send_notification(
+                    f"🏠 {len(new_listings)} uusi ilmoitus Sundssbergissä",
+                    _new_listing_email(new_listings),
+                )
+            for listing, old_p, new_p in price_drops:
+                drop_pct = (old_p - new_p) / old_p * 100
+                _send_notification(
+                    f"📉 Hinta -{drop_pct:.0f}% — {listing.address}",
+                    _price_drop_email(listing, old_p, new_p),
+                )
 
     log.info("Scrape finished")
 
@@ -155,11 +252,16 @@ if _now_hki.hour >= 7 and last_run_date != date.today():
 
 @app.route("/")
 def index():
-    with app.app_context():
-        active = Listing.query.filter_by(is_active=True).order_by(desc(Listing.first_seen_at)).all()
-        stats = _get_stats()
-        last_runs = ScrapeRun.query.order_by(desc(ScrapeRun.started_at)).limit(5).all()
-    return render_template("index.html", listings=active, stats=stats, last_runs=last_runs)
+    active = (
+        Listing.query
+        .filter_by(is_active=True)
+        .options(subqueryload(Listing.price_history))
+        .order_by(desc(Listing.first_seen_at))
+        .all()
+    )
+    stats = _get_stats()
+    last_runs = ScrapeRun.query.order_by(desc(ScrapeRun.started_at)).limit(5).all()
+    return render_template("index.html", listings=active, stats=stats, last_runs=last_runs, now=datetime.utcnow())
 
 
 @app.route("/api/listings")

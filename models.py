@@ -57,6 +57,17 @@ class Listing(db.Model):
         }
 
 
+class PriceHistory(db.Model):
+    __tablename__ = "price_history"
+
+    id          = db.Column(db.Integer, primary_key=True)
+    listing_id  = db.Column(db.Integer, db.ForeignKey("listings.id"), nullable=False)
+    price_eur   = db.Column(db.Integer)
+    recorded_at = db.Column(db.DateTime, default=datetime.utcnow)
+
+    listing = db.relationship("Listing", backref=db.backref("price_history", order_by="PriceHistory.recorded_at"))
+
+
 class ScrapeRun(db.Model):
     __tablename__ = "scrape_runs"
 
