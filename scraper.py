@@ -112,23 +112,31 @@ def _parse_oikotie_card(card, seen: set) -> Optional[dict]:
 
         address = lines[0] if lines else ""
 
-        price_match  = re.search(r"([\d\s]{4,10})\s*€", txt)
-        size_match   = re.search(r"([\d,]+)\s*/\s*[\d,]+\s*m²|([\d,]+)\s*m²", txt)
-        rooms_match  = re.search(r"Huoneita\s+(\d+)", txt)
-        floor_match  = re.search(r"Kerros\s+([\d]+)\s*/\s*([\d]+)", txt)
-        type_match   = re.search(
+        price_match     = re.search(r"([\d\s]{4,10})\s*€", txt)
+        size_match      = re.search(r"([\d,]+)\s*/\s*[\d,]+\s*m²|([\d,]+)\s*m²", txt)
+        rooms_match     = re.search(r"Huoneita\s+(\d+)", txt)
+        floor_match     = re.search(r"Kerros\s+([\d]+)\s*/\s*([\d]+)", txt)
+        type_match      = re.search(
             r"(Kerrostalo|Rivitalo|Omakotitalo|Paritalo|Luhtitalo|Erillistalo)",
             txt, re.I
         )
-        year_match   = re.search(r",\s*(19|20)\d{2}\b", txt)
+        year_match      = re.search(r",\s*(19|20)\d{2}\b", txt)
+        debt_match      = re.search(r"[Vv]elaton\s+(?:hinta\s+)?([\d\s]{4,10})\s*€", txt)
+        fee_match       = re.search(r"([\d,]+)\s*€\s*/\s*kk", txt)
+        condition_match = re.search(
+            r"\b(Erinomainen|Hyvä|Tyydyttävä|Välttävä|Uusi|Uudenveroinen)\b", txt
+        )
 
-        price   = _int(price_match.group(1)) if price_match else None
+        price    = _int(price_match.group(1)) if price_match else None
         raw_size = size_match.group(1) or size_match.group(2) if size_match else None
-        size_m2 = _float(raw_size)
-        floor   = f"{floor_match.group(1)}/{floor_match.group(2)}" if floor_match else ""
+        size_m2  = _float(raw_size)
+        floor    = f"{floor_match.group(1)}/{floor_match.group(2)}" if floor_match else ""
         prop_type = type_match.group(1).lower() if type_match else ""
         prop_type = OIKOTIE_CARD_TYPES.get(prop_type, prop_type)
-        year    = int(year_match.group().strip(", ")) if year_match else None
+        year     = int(year_match.group().strip(", ")) if year_match else None
+        debt_free = _int(debt_match.group(1)) if debt_match else None
+        fee       = _float(fee_match.group(1)) if fee_match else None
+        condition = condition_match.group(1) if condition_match else ""
 
         # Skip listings outside Sundsberg (Oikotie location ID can bleed into neighbours)
         # Keep if "Sundsberg" appears OR if there's no explicit other-area mention
@@ -153,11 +161,11 @@ def _parse_oikotie_card(card, seen: set) -> Optional[dict]:
             "size_m2":       size_m2,
             "price_eur":     price,
             "price_per_m2":  round(price / size_m2, 0) if (price and size_m2) else None,
-            "debt_free_price_eur": None,
+            "debt_free_price_eur": debt_free,
             "floor":         floor,
             "year_built":    year,
-            "condition":     "",
-            "housing_fee_eur": None,
+            "condition":     condition,
+            "housing_fee_eur": fee,
         }
     except Exception as exc:
         log.debug("Oikotie card parse error: %s", exc)
