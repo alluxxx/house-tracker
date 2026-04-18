@@ -163,7 +163,8 @@ def run_scrape():
         # Poista vanhat ei-Sundsberg-kohteet jotka pääsivät kantaan ennen suodatinta
         _non_sundsberg = ["masala", "veikkola", "jorvas", "tolsa", "kantvik",
                           "lapinkylä", "porkkala", "strömsby", "framnäs",
-                          "nupuri", "luoma", "lappböle"]
+                          "nupuri", "luoma", "lappböle", "sepänkannas",
+                          "gesterbyn", "inkilä", "volsintie"]
         for kw in _non_sundsberg:
             bad = Listing.query.filter(
                 Listing.is_active == True,

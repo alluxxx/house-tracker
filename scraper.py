@@ -141,7 +141,8 @@ def _parse_oikotie_card(card, seen: set) -> Optional[dict]:
         # Skip listings outside Sundsberg — check full card text and address
         known_non_sundsberg = {"masala", "veikkola", "jorvas", "tolsa", "kantvik",
                                "lapinkylä", "porkkala", "strömsby", "framnäs",
-                               "nupuri", "luoma", "lappböle"}
+                               "nupuri", "luoma", "lappböle", "sepänkannas",
+                               "gesterbyn", "inkilä", "volsintie"}
         full_lower = txt.lower()
         if any(kw in full_lower for kw in known_non_sundsberg):
             log.debug("Skipping non-Sundsberg listing: %s", address)
@@ -245,6 +246,7 @@ def _scrape_detail(page, url: str) -> dict:
             result["_neighborhood"] = neighborhood_match.group(1).strip()
         if postal_match:
             result["_postal_code"] = postal_match.group(1)
+        result["_full_text"] = txt[:5000]
 
         return result
     except Exception as exc:
@@ -300,17 +302,27 @@ def scrape_oikotie() -> list[dict]:
         for i, listing in enumerate(results):
             extra = _scrape_detail(detail_page, listing["url"])
 
-            # Neighborhood validation: if detail page reveals a non-Sundsberg area, drop it
+            # Neighborhood validation
             scraped_nb = extra.pop("_neighborhood", "").lower()
             scraped_pc = extra.pop("_postal_code", "")
+
+            # Jos kaupunginosa löytyi eikä se ole Sundsberg → hylkää
             if scraped_nb and "sundsberg" not in scraped_nb:
                 log.info("Dropping non-Sundsberg listing (neighborhood=%r): %s",
                          scraped_nb, listing["address"])
                 time.sleep(0.8)
                 continue
+            # Jos postinumero löytyi eikä täsmää → hylkää
             if scraped_pc and scraped_pc != SUNDSBERG_POSTAL:
                 log.info("Dropping non-Sundsberg listing (postal=%s): %s",
                          scraped_pc, listing["address"])
+                time.sleep(0.8)
+                continue
+            # Viimeisenä: jos "sundsberg" ei esiinny missään detail-sivun tekstissä → hylkää
+            detail_txt = extra.pop("_full_text", "")
+            if detail_txt and "sundsberg" not in detail_txt.lower():
+                log.info("Dropping non-Sundsberg listing (no sundsberg in page): %s",
+                         listing["address"])
                 time.sleep(0.8)
                 continue
 
