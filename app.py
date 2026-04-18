@@ -136,12 +136,14 @@ def _backfill_analysis():
                 extra.pop("_neighborhood", None)
                 extra.pop("_postal_code", None)
                 desc = extra.get("description") or listing.description
+                log.info("Backfill desc '%s': %d merkkiä",
+                         listing.address, len(desc) if desc else 0)
                 if desc:
                     listing.description = desc
                     listing.analysis = analyze_listing(desc)
                     log.info("Backfill analyysi: %s → score=%s",
                              listing.address,
-                             listing.analysis.get("score") if listing.analysis else None)
+                             listing.analysis.get("score") if listing.analysis else "ANALYYSI NONE")
                 time.sleep(1)
             except Exception as exc:
                 log.warning("Backfill virhe %s: %s", listing.address, exc)

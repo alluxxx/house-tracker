@@ -43,7 +43,11 @@ def analyze_listing(description: str) -> dict | None:
     Palauttaa None jos API-avain puuttuu tai kutsu epäonnistuu.
     """
     api_key = os.environ.get("GROQ_API_KEY")
-    if not api_key or not description:
+    if not api_key:
+        log.warning("GROQ_API_KEY puuttuu")
+        return None
+    if not description:
+        log.warning("Tyhjä description, ohitetaan analyysi")
         return None
 
     try:
@@ -60,6 +64,7 @@ def analyze_listing(description: str) -> dict | None:
         )
 
         raw = response.choices[0].message.content.strip()
+        log.info("Groq raw response (100 chars): %s", raw[:100])
         # Poista mahdolliset markdown-koodiblokki-merkit
         if raw.startswith("```"):
             raw = raw.split("```")[1]
@@ -68,7 +73,7 @@ def analyze_listing(description: str) -> dict | None:
         return json.loads(raw.strip())
 
     except json.JSONDecodeError as exc:
-        log.warning("Analyysi palautti virheellistä JSONia: %s", exc)
+        log.warning("Analyysi palautti virheellistä JSONia: %s | raw: %s", exc, raw[:200])
         return None
     except Exception as exc:
         log.error("Analyysi epäonnistui: %s", exc)
