@@ -7,8 +7,9 @@ Pisteytys (0–100):
   LLM-analyysin laatu               25 pts
   Kunto vs. muut kohteet            15 pts
   Rakennusvuosi                     15 pts
-  Vastike €/m²                      10 pts
-  Hintakehitys (laskut/nousut)       5 pts
+  Vastike €/m²                       8 pts
+  Hintakehitys (laskut/nousut)       4 pts
+  Aika markkinoilla vs. alue         3 pts
 """
 
 from __future__ import annotations
@@ -102,7 +103,7 @@ def _llm_score(analysis: Optional[dict]) -> int:
 
 
 def _price_trend_score(price_history: list) -> int:
-    """0–5 pistettä. Hinta laskenut = myyjä motivoitunut."""
+    """0–4 pistettä. Hinta laskenut = myyjä motivoitunut."""
     if len(price_history) < 2:
         return 2
     first = price_history[0].price_eur or 0
@@ -110,10 +111,29 @@ def _price_trend_score(price_history: list) -> int:
     if not first:
         return 2
     change = (last - first) / first
-    if change <= -0.05:   return 5   # laskenut yli 5%
-    if change <= -0.02:   return 4
+    if change <= -0.05:   return 4   # laskenut yli 5%
+    if change <= -0.02:   return 3
     if change == 0:       return 2
     return 0   # hinta noussut
+
+
+def _dom_score(days_on: int, all_days: list[int]) -> int:
+    """
+    0–3 pistettä. Aika markkinoilla vs. alueen keskiarvo.
+    Pitkään myynnissä = todennäköisesti ylihinnoiteltu tai ongelmia → miinus.
+    Tuore kohde = neutraali.
+    """
+    if not all_days:
+        return 1
+    avg_days = sum(all_days) / len(all_days)
+    if avg_days == 0:
+        return 1
+    ratio = days_on / avg_days
+    if ratio <= 0.25:   return 3   # selvästi tuoreempi kuin muut
+    if ratio <= 0.75:   return 2
+    if ratio <= 1.25:   return 1   # lähellä keskiarvoa
+    if ratio <= 2.0:    return 0   # selvästi kauemmin kuin muut
+    return -2                      # yli 2x keskiarvo = merkittävä miinus
 
 
 def calculate_score(listing, all_listings: list) -> dict:
@@ -140,13 +160,23 @@ def calculate_score(listing, all_listings: list) -> dict:
         if l.condition and l.id != listing.id
     ]
 
+    from datetime import datetime
+    def _days(l):
+        if l.first_seen_at:
+            return (datetime.utcnow() - l.first_seen_at).days
+        return 0
+
+    listing_days = _days(listing)
+    all_days = [_days(l) for l in all_listings if l.id != listing.id]
+
     ps   = _price_score(listing.price_per_m2, avg_price, std_price)
     cs   = _condition_score(listing.condition, all_condition_ranks)
     ys   = _year_score(listing.year_built)
     fs   = _fee_score(listing.housing_fee_eur, listing.size_m2)
     ls   = _llm_score(listing.analysis)
     ts   = _price_trend_score(list(listing.price_history))
-    total = ps + cs + ys + fs + ls + ts
+    ds   = _dom_score(listing_days, all_days)
+    total = max(0, min(100, ps + cs + ys + fs + ls + ts + ds))
 
     price_vs_avg_pct = None
     if listing.price_per_m2 and avg_price:
@@ -160,6 +190,9 @@ def calculate_score(listing, all_listings: list) -> dict:
         "fee_score":         fs,
         "llm_score":         ls,
         "trend_score":       ts,
+        "dom_score":         ds,
+        "days_on_market":    listing_days,
+        "avg_days_on_market": round(sum(all_days) / len(all_days)) if all_days else None,
         "avg_price_per_m2":  round(avg_price) if avg_price else None,
         "price_vs_avg_pct":  price_vs_avg_pct,
     }

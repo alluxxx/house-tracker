@@ -507,8 +507,13 @@ function showAnalysis(id) {
     html += `<span>Kunto <b style="color:var(--text)">${sc.condition_score}/15</b></span>`;
     html += `<span>Vuosi <b style="color:var(--text)">${sc.year_score}/15</b></span>`;
     html += `<span>Vastike <b style="color:var(--text)">${sc.fee_score}/10</b></span>`;
-    html += `<span>Trendi <b style="color:var(--text)">${sc.trend_score}/5</b></span>`;
+    html += `<span>Trendi <b style="color:var(--text)">${sc.trend_score}/4</b></span>`;
+    html += `<span>Markkinaaika <b style="color:var(--text)">${sc.dom_score}/3</b></span>`;
     html += `</div>`;
+    if (sc.avg_days_on_market !== null) {
+      const domColor = sc.dom_score >= 2 ? "var(--green)" : sc.dom_score >= 0 ? "var(--amber)" : "var(--red)";
+      html += `<div class="ai-row"><span class="ai-label">MARKKINOILLA</span><span style="color:${domColor};font-weight:700">${sc.days_on_market}d</span><span style="color:var(--muted);font-size:0.7rem;margin-left:0.4rem">(alueen ka. ${sc.avg_days_on_market}d)</span></div>`;
+    }
     if (sc.price_vs_avg_pct !== null) {
       const sign = sc.price_vs_avg_pct > 0 ? "+" : "";
       const pc = sc.price_vs_avg_pct > 0 ? "var(--red)" : "var(--green)";
