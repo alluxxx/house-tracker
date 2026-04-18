@@ -350,9 +350,12 @@ def index():
             seen.add(key)
             deduped.append(l)
 
+    from scoring import calculate_score
+    scores = {l.id: calculate_score(l, deduped) for l in deduped}
+
     stats = _get_stats()
     last_runs = ScrapeRun.query.order_by(desc(ScrapeRun.started_at)).limit(5).all()
-    return render_template("index.html", listings=deduped, stats=stats, last_runs=last_runs, now=datetime.utcnow())
+    return render_template("index.html", listings=deduped, scores=scores, stats=stats, last_runs=last_runs, now=datetime.utcnow())
 
 
 @app.route("/api/listings")
