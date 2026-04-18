@@ -43,6 +43,14 @@ with app.app_context():
         "CREATE TABLE IF NOT EXISTS properties (id SERIAL PRIMARY KEY, canonical_address VARCHAR(256), postal_code VARCHAR(10), city VARCHAR(64), neighborhood VARCHAR(64), property_type VARCHAR(32), size_m2 FLOAT, floor VARCHAR(16), year_built INTEGER, created_at TIMESTAMP DEFAULT NOW())",
         # Nollaa vanhat analyysit jotka tehtiin lyhyellä navigaatiotekstillä (alle 600 merkkiä)
         "UPDATE listings SET analysis = NULL, description = NULL WHERE char_length(description) < 600",
+        # Deaktivoi kaikki ei-Sundsberg-kohteet suoraan kannasta
+        """UPDATE listings SET is_active = FALSE, sold_at = NOW()
+           WHERE is_active = TRUE AND (
+             address ILIKE '%masala%' OR address ILIKE '%sepänkannas%' OR
+             address ILIKE '%framnäs%' OR address ILIKE '%veikkola%' OR
+             address ILIKE '%jorvas%' OR address ILIKE '%kantvik%' OR
+             address ILIKE '%gesterbyn%' OR address ILIKE '%nupuri%'
+           )""",
     ]
     with db.engine.connect() as conn:
         for sql in _migrations:
