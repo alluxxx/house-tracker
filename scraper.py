@@ -11,7 +11,7 @@ from playwright.sync_api import sync_playwright, TimeoutError as PlaywrightTimeo
 
 log = logging.getLogger(__name__)
 
-SUNDSBERG_POSTAL = "02430"
+SUNDSBERG_POSTAL = "02450"
 
 # Oikotie location ID for Sundsberg, Kirkkonummi  (from autocomplete API)
 # URL fragment: locations=[[4270,4,"Sundsberg, Kirkkonummi"]]
