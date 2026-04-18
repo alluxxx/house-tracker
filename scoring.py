@@ -26,16 +26,20 @@ CONDITION_RANK = {
 }
 
 
+_CONDITION_PTS = {
+    "uusi":          15,
+    "uudenveroinen": 14,
+    "erinomainen":   13,
+    "hyvä":          10,
+    "tyydyttävä":     5,
+    "välttävä":       0,
+}
+
 def _condition_score(condition: Optional[str], all_conditions: list[int]) -> int:
-    """0–15 pistettä. Vertaa kohteen kuntoa muiden kuntoluokituksiin."""
+    """0–15 pistettä absoluuttisen kuntoluokituksen mukaan."""
     if not condition:
-        return 7  # neutraali jos tieto puuttuu
-    rank = CONDITION_RANK.get(condition.lower(), 3)
-    if not all_conditions:
-        return int((rank / 5) * 15)
-    better = sum(1 for c in all_conditions if c < rank)
-    percentile = better / len(all_conditions)
-    return round(percentile * 15)
+        return 7
+    return _CONDITION_PTS.get(condition.lower(), 7)
 
 
 def _price_score(price_per_m2: Optional[float], avg: float, std: float) -> int:
