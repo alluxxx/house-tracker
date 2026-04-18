@@ -1,5 +1,6 @@
 """
-Analysoi asuntoilmoituksen tekstin Claude API:n avulla.
+Analysoi asuntoilmoituksen tekstin Groq API:n avulla (ilmainen tier).
+Käyttää llama-3.3-70b-versatile -mallia.
 Palauttaa strukturoidun JSON-objektin.
 """
 import json
@@ -30,28 +31,33 @@ Ilmoitusteksti:
 
 def analyze_listing(description: str) -> dict | None:
     """
-    Lähettää ilmoitustekstin Claude Haikulle ja palauttaa strukturoidun analyysin.
+    Lähettää ilmoitustekstin Groq API:lle ja palauttaa strukturoidun analyysin.
     Palauttaa None jos API-avain puuttuu tai kutsu epäonnistuu.
     """
-    api_key = os.environ.get("ANTHROPIC_API_KEY")
+    api_key = os.environ.get("GROQ_API_KEY")
     if not api_key or not description:
         return None
 
     try:
-        import anthropic
-        client = anthropic.Anthropic(api_key=api_key)
+        from groq import Groq
+        client = Groq(api_key=api_key)
 
-        message = client.messages.create(
-            model="claude-haiku-4-5-20251001",
+        response = client.chat.completions.create(
+            model="llama-3.3-70b-versatile",
             max_tokens=512,
+            temperature=0.1,
             messages=[
                 {"role": "user", "content": PROMPT + description[:3000]}
             ],
         )
 
-        raw = message.content[0].text.strip()
-        # Varmista että JSON on validi
-        return json.loads(raw)
+        raw = response.choices[0].message.content.strip()
+        # Poista mahdolliset markdown-koodiblokki-merkit
+        if raw.startswith("```"):
+            raw = raw.split("```")[1]
+            if raw.startswith("json"):
+                raw = raw[4:]
+        return json.loads(raw.strip())
 
     except json.JSONDecodeError as exc:
         log.warning("Analyysi palautti virheellistä JSONia: %s", exc)
