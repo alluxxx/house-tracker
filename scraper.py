@@ -138,13 +138,12 @@ def _parse_oikotie_card(card, seen: set) -> Optional[dict]:
         fee       = _float(fee_match.group(1)) if fee_match else None
         condition = condition_match.group(1) if condition_match else ""
 
-        # Skip listings outside Sundsberg (Oikotie location ID can bleed into neighbours)
-        # Keep if "Sundsberg" appears OR if there's no explicit other-area mention
-        # (address line 0 is the street address; city/area is usually in lines[1])
-        area_hint = lines[1] if len(lines) > 1 else ""
+        # Skip listings outside Sundsberg — check full card text and address
         known_non_sundsberg = {"masala", "veikkola", "jorvas", "tolsa", "kantvik",
-                               "lapinkylä", "porkkala", "strömsby"}
-        if any(kw in area_hint.lower() for kw in known_non_sundsberg):
+                               "lapinkylä", "porkkala", "strömsby", "framnäs",
+                               "nupuri", "luoma", "lappböle"}
+        full_lower = txt.lower()
+        if any(kw in full_lower for kw in known_non_sundsberg):
             log.debug("Skipping non-Sundsberg listing: %s", address)
             return None
 

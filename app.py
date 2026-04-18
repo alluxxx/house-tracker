@@ -104,6 +104,22 @@ def run_scrape():
     source_results = scrape_all()
 
     with app.app_context():
+        # Poista vanhat ei-Sundsberg-kohteet jotka pääsivät kantaan ennen suodatinta
+        _non_sundsberg = ["masala", "veikkola", "jorvas", "tolsa", "kantvik",
+                          "lapinkylä", "porkkala", "strömsby", "framnäs",
+                          "nupuri", "luoma", "lappböle"]
+        for kw in _non_sundsberg:
+            bad = Listing.query.filter(
+                Listing.is_active == True,
+                Listing.address.ilike(f"%{kw}%"),
+            ).all()
+            for b in bad:
+                b.is_active = False
+                b.sold_at = datetime.utcnow()
+                log.info("Deactivated non-Sundsberg listing: %s", b.address)
+        if any(_non_sundsberg):
+            db.session.commit()
+
         for source, listings in source_results.items():
             run = ScrapeRun(source=source, started_at=datetime.utcnow())
             db.session.add(run)
