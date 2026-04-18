@@ -35,6 +35,20 @@ db.init_app(app)
 
 with app.app_context():
     db.create_all()
+    # Migraatio: lisää puuttuvat sarakkeet jos niitä ei ole kannassa
+    _migrations = [
+        "ALTER TABLE listings ADD COLUMN IF NOT EXISTS description TEXT",
+        "ALTER TABLE listings ADD COLUMN IF NOT EXISTS analysis JSON",
+        "ALTER TABLE listings ADD COLUMN IF NOT EXISTS property_id INTEGER REFERENCES properties(id)",
+        "CREATE TABLE IF NOT EXISTS properties (id SERIAL PRIMARY KEY, canonical_address VARCHAR(256), postal_code VARCHAR(10), city VARCHAR(64), neighborhood VARCHAR(64), property_type VARCHAR(32), size_m2 FLOAT, floor VARCHAR(16), year_built INTEGER, created_at TIMESTAMP DEFAULT NOW())",
+    ]
+    with db.engine.connect() as conn:
+        for sql in _migrations:
+            try:
+                conn.execute(db.text(sql))
+            except Exception as e:
+                log.warning("Migration skipped: %s", e)
+        conn.commit()
 
 # ---------------------------------------------------------------------------
 # Scrape job
