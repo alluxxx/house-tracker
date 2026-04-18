@@ -120,7 +120,7 @@ def _backfill_analysis():
 
     missing = Listing.query.filter(
         Listing.is_active == True,
-        Listing.analysis == None,
+        Listing.analysis.is_(None),
     ).all()
 
     if not missing:
@@ -139,9 +139,9 @@ def _backfill_analysis():
                 if desc:
                     listing.description = desc
                     listing.analysis = analyze_listing(desc)
-                    log.debug("Backfill analyysi: %s → score=%s",
-                              listing.address,
-                              listing.analysis.get("score") if listing.analysis else None)
+                    log.info("Backfill analyysi: %s → score=%s",
+                             listing.address,
+                             listing.analysis.get("score") if listing.analysis else None)
                 time.sleep(1)
             except Exception as exc:
                 log.warning("Backfill virhe %s: %s", listing.address, exc)

@@ -204,13 +204,27 @@ def _scrape_detail(page, url: str) -> dict:
                 r"\b(Erinomainen|Hyvä|Tyydyttävä|Välttävä|Uusi|Uudenveroinen)\b", txt
             )
 
-        # Ilmoitusteksti — ensimmäinen pitkä kappale (yli 80 merkkiä)
+        # Ilmoitusteksti — kokeile ensin tunnettuja selektoreita, sitten pisin kappale
         description = ""
-        for line in txt.split("\n"):
-            line = line.strip()
-            if len(line) > 80:
-                description = line
-                break
+        for sel in [
+            "[class*='description']",
+            "[class*='Description']",
+            "[class*='listing-text']",
+            "[class*='free-text']",
+            "[class*='presentation']",
+        ]:
+            el = page.query_selector(sel)
+            if el:
+                candidate = el.inner_text().strip()
+                if len(candidate) > 50:
+                    description = candidate[:3000]
+                    break
+
+        if not description:
+            # Fallback: pisin yksittäinen kappale sivulta
+            paragraphs = [p.strip() for p in txt.split("\n") if len(p.strip()) > 80]
+            if paragraphs:
+                description = max(paragraphs, key=len)[:3000]
 
         # Kaupunginosa ja postinumero — käytetään validointiin
         neighborhood_match = re.search(
