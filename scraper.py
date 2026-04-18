@@ -208,7 +208,7 @@ def _scrape_detail(page, url: str) -> dict:
         neighborhood_match = re.search(
             r"(?:Kaupunginosa|Alue)[^\n]*\n\s*([^\n]{2,40})", txt
         )
-        postal_match = re.search(r"\b(0\d{4})\b", txt)
+        postal_match = re.search(r"\b(\d{5})\s+Kirkkonummi\b", txt, re.I)
 
         result = {}
         if debt_match:
