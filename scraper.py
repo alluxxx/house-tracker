@@ -174,12 +174,14 @@ def _parse_oikotie_card(card, seen: set) -> Optional[dict]:
 def _scrape_detail(page, url: str) -> dict:
     """
     Visit a single Oikotie listing page and return extra fields:
-    debt_free_price_eur, housing_fee_eur, condition.
+    debt_free_price_eur, housing_fee_eur, condition, _neighborhood, _postal_code.
+
+    _neighborhood and _postal_code are prefixed with _ so run_scrape can use
+    them for validation without writing them to the Listing model directly.
     Returns empty dict on any failure.
     """
     try:
         page.goto(url, wait_until="domcontentloaded", timeout=20000)
-        # Wait for the facts table to appear
         try:
             page.wait_for_selector("[class*='info-table'], [class*='details'], dt", timeout=8000)
         except PlaywrightTimeout:
@@ -197,11 +199,16 @@ def _scrape_detail(page, url: str) -> dict:
             r"[Kk]unto[^\n]*\n\s*(Erinomainen|Hyvä|Tyydyttävä|Välttävä|Uusi|Uudenveroinen)",
             txt
         )
-        # fallback: bare keyword anywhere
         if not condition_match:
             condition_match = re.search(
                 r"\b(Erinomainen|Hyvä|Tyydyttävä|Välttävä|Uusi|Uudenveroinen)\b", txt
             )
+
+        # Kaupunginosa ja postinumero — käytetään validointiin
+        neighborhood_match = re.search(
+            r"(?:Kaupunginosa|Alue)[^\n]*\n\s*([^\n]{2,40})", txt
+        )
+        postal_match = re.search(r"\b(0\d{4})\b", txt)
 
         result = {}
         if debt_match:
@@ -210,6 +217,10 @@ def _scrape_detail(page, url: str) -> dict:
             result["housing_fee_eur"] = _float(fee_match.group(1))
         if condition_match:
             result["condition"] = condition_match.group(1)
+        if neighborhood_match:
+            result["_neighborhood"] = neighborhood_match.group(1).strip()
+        if postal_match:
+            result["_postal_code"] = postal_match.group(1)
 
         return result
     except Exception as exc:
@@ -259,13 +270,32 @@ def scrape_oikotie() -> list[dict]:
             except Exception:
                 break
 
-        # Enrich each listing with detail-page data
+        # Enrich each listing with detail-page data; validate neighborhood/postal
         detail_page = ctx.new_page()
+        validated = []
         for i, listing in enumerate(results):
             extra = _scrape_detail(detail_page, listing["url"])
+
+            # Neighborhood validation: if detail page reveals a non-Sundsberg area, drop it
+            scraped_nb = extra.pop("_neighborhood", "").lower()
+            scraped_pc = extra.pop("_postal_code", "")
+            if scraped_nb and "sundsberg" not in scraped_nb:
+                log.info("Dropping non-Sundsberg listing (neighborhood=%r): %s",
+                         scraped_nb, listing["address"])
+                time.sleep(0.8)
+                continue
+            if scraped_pc and scraped_pc != SUNDSBERG_POSTAL:
+                log.info("Dropping non-Sundsberg listing (postal=%s): %s",
+                         scraped_pc, listing["address"])
+                time.sleep(0.8)
+                continue
+
             listing.update(extra)
+            validated.append(listing)
             log.debug("Detail %d/%d %s → %s", i + 1, len(results), listing["external_id"], extra)
             time.sleep(0.8)
+
+        results = validated
 
         ctx.browser.close()
 
