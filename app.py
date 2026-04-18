@@ -111,6 +111,45 @@ def _price_drop_email(listing, old_price: int, new_price: int) -> str:
 <p><a href='{listing.url}'>Katso ilmoitus →</a></p>"""
 
 
+def _backfill_analysis():
+    """Analysoi olemassa olevat kohteet joilta puuttuu analyysi."""
+    from scraper import _scrape_detail, _new_browser_context
+    from analyzer import analyze_listing
+    from playwright.sync_api import sync_playwright
+    import time
+
+    missing = Listing.query.filter(
+        Listing.is_active == True,
+        Listing.analysis == None,
+    ).all()
+
+    if not missing:
+        return
+
+    log.info("Backfill: analysoidaan %d kohdetta", len(missing))
+    with sync_playwright() as pw:
+        ctx = _new_browser_context(pw)
+        page = ctx.new_page()
+        for listing in missing:
+            try:
+                extra = _scrape_detail(page, listing.url)
+                extra.pop("_neighborhood", None)
+                extra.pop("_postal_code", None)
+                desc = extra.get("description") or listing.description
+                if desc:
+                    listing.description = desc
+                    listing.analysis = analyze_listing(desc)
+                    log.debug("Backfill analyysi: %s → score=%s",
+                              listing.address,
+                              listing.analysis.get("score") if listing.analysis else None)
+                time.sleep(1)
+            except Exception as exc:
+                log.warning("Backfill virhe %s: %s", listing.address, exc)
+        ctx.browser.close()
+    db.session.commit()
+    log.info("Backfill valmis")
+
+
 def run_scrape():
     from scraper import scrape_all
     from property_matcher import find_or_create_property
@@ -242,6 +281,10 @@ def run_scrape():
                     f"📉 Hinta -{drop_pct:.0f}% — {listing.address}",
                     _price_drop_email(listing, old_p, new_p),
                 )
+
+    # Analysoi kohteet joilta puuttuu analyysi (uudet + vanhat backfill)
+    with app.app_context():
+        _backfill_analysis()
 
     log.info("Scrape finished")
 
