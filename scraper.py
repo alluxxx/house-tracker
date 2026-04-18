@@ -205,27 +205,9 @@ def _scrape_detail(page, url: str) -> dict:
                 r"\b(Erinomainen|Hyvä|Tyydyttävä|Välttävä|Uusi|Uudenveroinen)\b", txt
             )
 
-        # Ilmoitusteksti — kokeile ensin tunnettuja selektoreita, sitten pisin kappale
-        description = ""
-        for sel in [
-            "[class*='description']",
-            "[class*='Description']",
-            "[class*='listing-text']",
-            "[class*='free-text']",
-            "[class*='presentation']",
-        ]:
-            el = page.query_selector(sel)
-            if el:
-                candidate = el.inner_text().strip()
-                if len(candidate) > 50:
-                    description = candidate[:3000]
-                    break
-
-        if not description:
-            # Fallback: pisin yksittäinen kappale sivulta
-            paragraphs = [p.strip() for p in txt.split("\n") if len(p.strip()) > 80]
-            if paragraphs:
-                description = max(paragraphs, key=len)[:3000]
+        # Ilmoitusteksti — ohita navigaatio (alkupää) ja anna iso siivu sivun tekstistä
+        # Oikotie-sivulla varsinainen sisältö alkaa tyypillisesti ~2000 merkin jälkeen
+        description = txt[1500:5500] if len(txt) > 1500 else txt
 
         # Kaupunginosa ja postinumero — käytetään validointiin
         neighborhood_match = re.search(

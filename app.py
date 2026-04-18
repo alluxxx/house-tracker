@@ -41,6 +41,8 @@ with app.app_context():
         "ALTER TABLE listings ADD COLUMN IF NOT EXISTS analysis JSON",
         "ALTER TABLE listings ADD COLUMN IF NOT EXISTS property_id INTEGER REFERENCES properties(id)",
         "CREATE TABLE IF NOT EXISTS properties (id SERIAL PRIMARY KEY, canonical_address VARCHAR(256), postal_code VARCHAR(10), city VARCHAR(64), neighborhood VARCHAR(64), property_type VARCHAR(32), size_m2 FLOAT, floor VARCHAR(16), year_built INTEGER, created_at TIMESTAMP DEFAULT NOW())",
+        # Nollaa vanhat analyysit jotka tehtiin lyhyellä navigaatiotekstillä (alle 600 merkkiä)
+        "UPDATE listings SET analysis = NULL, description = NULL WHERE char_length(description) < 600",
     ]
     with db.engine.connect() as conn:
         for sql in _migrations:

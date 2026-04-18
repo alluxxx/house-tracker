@@ -9,7 +9,7 @@ import os
 
 log = logging.getLogger(__name__)
 
-PROMPT = """Olet suomalaisen kiinteistömarkkinan asiantuntija. Analysoi seuraava asuntoilmoitusteksti ja palauta analyysi JSON-muodossa.
+PROMPT = """Olet suomalaisen kiinteistömarkkinan asiantuntija. Alla on tekstiä Oikotie-asuntoilmoitussivulta. Teksti voi sisältää navigaatioelementtejä ja muuta sivustorakennetta — keskity ainoastaan varsinaiseen asuntoilmoitustekstiin ja kohteen tietoihin. Analysoi ne ja palauta analyysi JSON-muodossa.
 
 Palauta VAIN validi JSON, ei muuta tekstiä. Käytä tätä rakennetta:
 {
