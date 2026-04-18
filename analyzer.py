@@ -22,8 +22,16 @@ Palauta VAIN validi JSON, ei muuta tekstiä. Käytä tätä rakennetta:
   "key_positives": ["max 3 lyhyttä pointtia"],
   "key_negatives": ["max 3 lyhyttä pointtia"],
   "urgency_signals": ["esim. vapautuu heti", "nopea kauppa mahdollinen"],
-  "summary_fi": "1-2 lauseen tiivistelmä suomeksi"
+  "summary_fi": "1-2 lauseen tiivistelmä suomeksi",
+  "score": 0-100,
+  "score_reasoning": "1-2 lausetta miksi tämä pistemäärä"
 }
+
+Scoring-ohjeet (score 0-100):
+- Lähtötaso 50
+- Nosta pisteitä: oma tontti (+10), energialuokka A/B (+8), sauna (+5), uusi tai erinomainen kunto (+8), ei tulevia remontteja (+5), parveke/terassi (+4), autotalli/autopaikka (+4), nopea vapautuminen (+3)
+- Laske pisteitä: vuokratontti (-10), tuleva putkiremontti (-12), julkisivuremontti tulossa (-8), huono kunto (-10), energialuokka E/F/G (-8), myydään sellaisena kuin on (-10), hinta laskenut useasti (-5)
+- Pidä score välillä 0-100
 
 Ilmoitusteksti:
 """

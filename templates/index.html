@@ -384,6 +384,7 @@
           <th onclick="sortTable(8)">YEAR ↕</th>
           <th onclick="sortTable(9)">COND ↕</th>
           <th onclick="sortTable(10)">ON MARKET ↕</th>
+          <th onclick="sortTable(11)">SCORE ↕</th>
           <th>SRC</th>
           <th>AI</th>
         </tr>
@@ -422,6 +423,12 @@
             <span class="{% if days_on <= 14 %}dom-hot{% elif days_on <= 60 %}dom-warn{% else %}dom-cold{% endif %}">
               {{ days_on }}d
             </span>
+          </td>
+          {% set score = l.analysis.score if l.analysis and l.analysis.score is defined else None %}
+          <td data-val="{{ score or 0 }}">
+            {% if score is not none %}
+              <span style="font-weight:700;color:{% if score >= 70 %}var(--green){% elif score >= 45 %}var(--amber){% else %}var(--red){% endif %};text-shadow:0 0 6px currentColor">{{ score }}</span>
+            {% else %}–{% endif %}
           </td>
           <td><span class="badge badge-{{ l.source }}">{{ l.source }}</span></td>
           <td>
@@ -485,9 +492,10 @@ function showAnalysis(id) {
 
   let html = "";
 
-  if (a.sentiment_score !== undefined) {
-    const color = a.sentiment_score >= 70 ? "var(--green)" : a.sentiment_score >= 40 ? "var(--amber)" : "var(--red)";
-    html += `<div class="ai-row"><span class="ai-label">SCORE</span><span class="ai-score" style="color:${color}">${a.sentiment_score}</span><span style="color:var(--muted);font-size:0.7rem;margin-left:0.5rem;align-self:flex-end">/100</span></div>`;
+  if (a.score !== undefined) {
+    const color = a.score >= 70 ? "var(--green)" : a.score >= 45 ? "var(--amber)" : "var(--red)";
+    html += `<div class="ai-row"><span class="ai-label">SCORE</span><span class="ai-score" style="color:${color}">${a.score}</span><span style="color:var(--muted);font-size:0.7rem;margin-left:0.5rem;align-self:flex-end">/100</span></div>`;
+    if (a.score_reasoning) html += `<div class="ai-row"><span class="ai-label"></span><span style="color:var(--muted);font-size:0.72rem">${a.score_reasoning}</span></div>`;
   }
 
   html += row("ENERGIALUOKKA", a.energy_class && a.energy_class !== "null" ? a.energy_class : null);
