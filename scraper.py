@@ -204,6 +204,14 @@ def _scrape_detail(page, url: str) -> dict:
                 r"\b(Erinomainen|Hyvä|Tyydyttävä|Välttävä|Uusi|Uudenveroinen)\b", txt
             )
 
+        # Ilmoitusteksti — ensimmäinen pitkä kappale (yli 80 merkkiä)
+        description = ""
+        for line in txt.split("\n"):
+            line = line.strip()
+            if len(line) > 80:
+                description = line
+                break
+
         # Kaupunginosa ja postinumero — käytetään validointiin
         neighborhood_match = re.search(
             r"(?:Kaupunginosa|Alue)[^\n]*\n\s*([^\n]{2,40})", txt
@@ -217,6 +225,8 @@ def _scrape_detail(page, url: str) -> dict:
             result["housing_fee_eur"] = _float(fee_match.group(1))
         if condition_match:
             result["condition"] = condition_match.group(1)
+        if description:
+            result["description"] = description
         if neighborhood_match:
             result["_neighborhood"] = neighborhood_match.group(1).strip()
         if postal_match:

@@ -44,6 +44,51 @@
       z-index: 9999;
     }
 
+    /* ── ANALYSIS PANEL ── */
+    .ai-badge {
+      display: inline-block;
+      font-size: 0.65rem;
+      padding: 0.1rem 0.4rem;
+      border: 1px solid var(--green-dim);
+      color: var(--green-dim);
+      cursor: pointer;
+      letter-spacing: 0.08em;
+    }
+    .ai-badge:hover { border-color: var(--green); color: var(--green); }
+
+    .ai-panel {
+      display: none;
+      position: fixed;
+      top: 50%; left: 50%;
+      transform: translate(-50%, -50%);
+      background: #0d110d;
+      border: 1px solid var(--green);
+      box-shadow: 0 0 30px rgba(0,255,65,0.15);
+      padding: 1.5rem;
+      width: min(560px, 90vw);
+      z-index: 1000;
+      font-size: 0.8rem;
+      max-height: 80vh;
+      overflow-y: auto;
+    }
+    .ai-panel.open { display: block; }
+    .ai-panel h3 { color: var(--green); font-size: 0.85rem; letter-spacing: 0.1em; margin-bottom: 1rem; }
+    .ai-panel .close-btn { float: right; cursor: pointer; color: var(--muted); font-size: 1rem; margin-top: -0.2rem; }
+    .ai-panel .close-btn:hover { color: var(--red); }
+    .ai-row { display: flex; gap: 0.5rem; margin-bottom: 0.4rem; }
+    .ai-label { color: var(--muted); min-width: 140px; font-size: 0.72rem; }
+    .ai-val { color: var(--text); }
+    .ai-tag { display: inline-block; border: 1px solid var(--green-dk); color: var(--green-dim);
+              padding: 0.1rem 0.35rem; font-size: 0.68rem; margin: 0.1rem; }
+    .ai-tag-neg { border-color: #5a1a1a; color: var(--red); }
+    .ai-tag-warn { border-color: #5a4500; color: var(--amber); }
+    .ai-score { font-size: 1.6rem; font-weight: 700; color: var(--green);
+                text-shadow: 0 0 12px var(--green-dim); }
+    .ai-summary { color: var(--text); margin-top: 0.8rem; padding-top: 0.8rem;
+                  border-top: 1px solid var(--border); font-style: italic; }
+    .overlay { display: none; position: fixed; inset: 0; background: rgba(0,0,0,0.7); z-index: 999; }
+    .overlay.open { display: block; }
+
     /* ── HEADER ── */
     header {
       border-bottom: 1px solid var(--border);
@@ -340,6 +385,7 @@
           <th onclick="sortTable(9)">COND ↕</th>
           <th onclick="sortTable(10)">ON MARKET ↕</th>
           <th>SRC</th>
+          <th>AI</th>
         </tr>
       </thead>
       <tbody>
@@ -378,6 +424,13 @@
             </span>
           </td>
           <td><span class="badge badge-{{ l.source }}">{{ l.source }}</span></td>
+          <td>
+            {% if l.analysis %}
+              <span class="ai-badge" onclick="showAnalysis({{ l.id }})">[ AI ]</span>
+            {% else %}
+              <span style="color:var(--muted);font-size:0.65rem;">–</span>
+            {% endif %}
+          </td>
         </tr>
         {% else %}
         <tr><td colspan="12" style="text-align:center;color:var(--muted);padding:2rem;letter-spacing:.1em;">
@@ -407,6 +460,70 @@
   {% endif %}
 
 </div>
+
+<!-- Analysis panels -->
+<div class="overlay" id="overlay" onclick="closeAnalysis()"></div>
+<div class="ai-panel" id="aiPanel">
+  <h3>// AI ANALYSIS <span class="close-btn" onclick="closeAnalysis()">✕</span></h3>
+  <div id="aiContent"></div>
+</div>
+
+<!-- Listing analysis data -->
+<script>
+const ANALYSES = {
+  {% for l in listings %}{% if l.analysis %}
+  {{ l.id }}: {{ l.analysis | tojson }},
+  {% endif %}{% endfor %}
+};
+
+function showAnalysis(id) {
+  const a = ANALYSES[id];
+  if (!a) return;
+
+  const tag  = (t, cls="") => `<span class="ai-tag ${cls}">${t}</span>`;
+  const row  = (label, val) => val ? `<div class="ai-row"><span class="ai-label">${label}</span><span class="ai-val">${val}</span></div>` : "";
+
+  let html = "";
+
+  if (a.sentiment_score !== undefined) {
+    const color = a.sentiment_score >= 70 ? "var(--green)" : a.sentiment_score >= 40 ? "var(--amber)" : "var(--red)";
+    html += `<div class="ai-row"><span class="ai-label">SCORE</span><span class="ai-score" style="color:${color}">${a.sentiment_score}</span><span style="color:var(--muted);font-size:0.7rem;margin-left:0.5rem;align-self:flex-end">/100</span></div>`;
+  }
+
+  html += row("ENERGIALUOKKA", a.energy_class && a.energy_class !== "null" ? a.energy_class : null);
+  html += row("TONTTI", a.land_ownership && a.land_ownership !== "null" ? a.land_ownership.toUpperCase() : null);
+
+  if (a.amenities?.length)
+    html += `<div class="ai-row"><span class="ai-label">VARUSTEET</span><span>${a.amenities.map(t => tag(t)).join("")}</span></div>`;
+
+  if (a.renovations_done?.length)
+    html += `<div class="ai-row"><span class="ai-label">REMONTIT TEHTY</span><span>${a.renovations_done.map(t => tag(t)).join("")}</span></div>`;
+
+  if (a.renovations_upcoming?.length)
+    html += `<div class="ai-row"><span class="ai-label">REMONTIT TULOSSA</span><span>${a.renovations_upcoming.map(t => tag(t, "ai-tag-warn")).join("")}</span></div>`;
+
+  if (a.key_positives?.length)
+    html += `<div class="ai-row"><span class="ai-label">POSITIIVISTA</span><span>${a.key_positives.map(t => tag(t)).join("")}</span></div>`;
+
+  if (a.key_negatives?.length)
+    html += `<div class="ai-row"><span class="ai-label">NEGATIIVISTA</span><span>${a.key_negatives.map(t => tag(t, "ai-tag-neg")).join("")}</span></div>`;
+
+  if (a.urgency_signals?.length)
+    html += `<div class="ai-row"><span class="ai-label">KIIREELLISYYS</span><span>${a.urgency_signals.map(t => tag(t, "ai-tag-warn")).join("")}</span></div>`;
+
+  if (a.summary_fi)
+    html += `<div class="ai-summary">${a.summary_fi}</div>`;
+
+  document.getElementById("aiContent").innerHTML = html;
+  document.getElementById("aiPanel").classList.add("open");
+  document.getElementById("overlay").classList.add("open");
+}
+
+function closeAnalysis() {
+  document.getElementById("aiPanel").classList.remove("open");
+  document.getElementById("overlay").classList.remove("open");
+}
+</script>
 
 <footer>SUNDSBERG PROPERTY TRACKER &nbsp;·&nbsp; KIRKKONUMMI FI &nbsp;·&nbsp; DATA: OIKOTIE / ETUOVI</footer>
 

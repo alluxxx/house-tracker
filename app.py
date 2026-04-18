@@ -100,6 +100,7 @@ def _price_drop_email(listing, old_price: int, new_price: int) -> str:
 def run_scrape():
     from scraper import scrape_all
     from property_matcher import find_or_create_property
+    from analyzer import analyze_listing
     log.info("Scrape started")
     source_results = scrape_all()
 
@@ -153,6 +154,10 @@ def run_scrape():
                 if existing is None:
                     prop = find_or_create_property(db, Property, data)
                     listing = Listing(**data, property_id=prop.id)
+                    # Analysoi ilmoitusteksti Claudella
+                    if data.get("description"):
+                        listing.analysis = analyze_listing(data["description"])
+                        log.debug("Analysis for %s: %s", data.get("address"), listing.analysis)
                     db.session.add(listing)
                     db.session.flush()   # saa listing.id käyttöön
                     # Kirjaa aloitushinta historiaan

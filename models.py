@@ -43,6 +43,8 @@ class Listing(db.Model):
     debt_free_price_eur = db.Column(db.Integer)                # velaton hinta
     housing_fee_eur     = db.Column(db.Float)                  # vastike €/kk
     condition     = db.Column(db.String(32))
+    description   = db.Column(db.Text)
+    analysis      = db.Column(db.JSON)          # Claude API output
     first_seen_at = db.Column(db.DateTime, default=datetime.utcnow)
     last_seen_at  = db.Column(db.DateTime, default=datetime.utcnow, onupdate=datetime.utcnow)
     sold_at       = db.Column(db.DateTime)                     # set when listing disappears
