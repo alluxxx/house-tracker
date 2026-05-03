@@ -40,6 +40,9 @@ with app.app_context():
         "ALTER TABLE listings ADD COLUMN IF NOT EXISTS description TEXT",
         "ALTER TABLE listings ADD COLUMN IF NOT EXISTS analysis JSON",
         "ALTER TABLE listings ADD COLUMN IF NOT EXISTS property_id INTEGER REFERENCES properties(id)",
+        "ALTER TABLE listings ADD COLUMN IF NOT EXISTS share_of_debt_eur INTEGER",
+        "ALTER TABLE listings ADD COLUMN IF NOT EXISTS land_ownership VARCHAR(16)",
+        "ALTER TABLE listings ADD COLUMN IF NOT EXISTS land_lease_fee_eur FLOAT",
         "CREATE TABLE IF NOT EXISTS properties (id SERIAL PRIMARY KEY, canonical_address VARCHAR(256), postal_code VARCHAR(10), city VARCHAR(64), neighborhood VARCHAR(64), property_type VARCHAR(32), size_m2 FLOAT, floor VARCHAR(16), year_built INTEGER, created_at TIMESTAMP DEFAULT NOW())",
         # Nollaa vanhat analyysit jotka tehtiin lyhyellä navigaatiotekstillä (alle 600 merkkiä)
         "UPDATE listings SET analysis = NULL, description = NULL WHERE char_length(description) < 600",
@@ -218,6 +221,12 @@ def run_scrape():
                 ).first()
 
                 if existing is None:
+                    # Laske yhtiölaina jos ei saatu suoraan scraperilta
+                    if not data.get("share_of_debt_eur") and data.get("debt_free_price_eur") and data.get("price_eur"):
+                        calc = data["debt_free_price_eur"] - data["price_eur"]
+                        if calc > 0:
+                            data["share_of_debt_eur"] = calc
+                    data.pop("_debt_free_for_calc", None)
                     prop = find_or_create_property(db, Property, data)
                     listing = Listing(**data, property_id=prop.id)
                     # Analysoi ilmoitusteksti Claudella

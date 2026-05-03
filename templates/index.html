@@ -594,11 +594,13 @@
             <th onclick="sortTable(4)">Hinta ↕</th>
             <th onclick="sortTable(5)">€/m² ↕</th>
             <th onclick="sortTable(6)">Velaton ↕</th>
-            <th onclick="sortTable(7)">Vastike ↕</th>
-            <th onclick="sortTable(8)">Vuosi ↕</th>
-            <th onclick="sortTable(9)">Kunto ↕</th>
-            <th onclick="sortTable(10)">Markkinalla ↕</th>
-            <th onclick="sortTable(11)">Score ↕</th>
+            <th onclick="sortTable(7)">Yhtiölaina ↕</th>
+            <th onclick="sortTable(8)">Vastike ↕</th>
+            <th onclick="sortTable(9)">Tontti</th>
+            <th onclick="sortTable(10)">Vuosi ↕</th>
+            <th onclick="sortTable(11)">Kunto ↕</th>
+            <th onclick="sortTable(12)">Markkinalla ↕</th>
+            <th onclick="sortTable(13)">Score ↕</th>
             <th>Src</th>
             <th>AI</th>
           </tr>
@@ -637,7 +639,24 @@
               {% else %}–{% endif %}
             </td>
             <td data-val="{{ l.debt_free_price_eur or 0 }}">{{ "{:,}".format(l.debt_free_price_eur).replace(",","&thinsp;")|safe if l.debt_free_price_eur else "–" }}</td>
+            <td data-val="{{ l.share_of_debt_eur or 0 }}">
+              {% if l.share_of_debt_eur %}
+                {% set debt_ratio = l.share_of_debt_eur / l.price_eur if l.price_eur else 0 %}
+                <span style="color:{% if debt_ratio > 0.3 %}var(--red){% elif debt_ratio > 0.15 %}var(--amber){% else %}var(--text-dim){% endif %}">
+                  {{ "{:,}".format(l.share_of_debt_eur).replace(",","&thinsp;")|safe }} €
+                </span>
+              {% else %}–{% endif %}
+            </td>
             <td data-val="{{ l.housing_fee_eur or 0 }}">{{ "%.0f"|format(l.housing_fee_eur) ~ " €" if l.housing_fee_eur else "–" }}</td>
+            <td>
+              {% if l.land_ownership == "oma" %}
+                <span style="color:var(--green);font-weight:600">oma</span>
+              {% elif l.land_ownership == "vuokra" %}
+                <span style="color:var(--red);font-weight:600" title="{{ '%.0f €/kk'|format(l.land_lease_fee_eur) if l.land_lease_fee_eur else 'vuokra' }}">
+                  vuokra{% if l.land_lease_fee_eur %} ({{ "%.0f"|format(l.land_lease_fee_eur) }}€){% endif %}
+                </span>
+              {% else %}–{% endif %}
+            </td>
             <td>{{ l.year_built or "–" }}</td>
             <td>
               {% if l.condition %}

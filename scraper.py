@@ -205,8 +205,27 @@ def _scrape_detail(page, url: str) -> dict:
                 r"\b(Erinomainen|Hyvä|Tyydyttävä|Välttävä|Uusi|Uudenveroinen)\b", txt
             )
 
+        # Tontin omistus: oma / vuokra
+        land_match = re.search(
+            r"[Tt]ontin\s+omistus[^\n]*\n\s*(Oma|Vuokra|oma|vuokra)", txt
+        )
+        if not land_match:
+            land_match = re.search(r"\b(Oma\s+tontti|Vuokratontti)\b", txt, re.I)
+
+        # Tonttivuokra — vuosittainen tai kuukausittainen
+        lease_annual_match = re.search(
+            r"[Tt]onttivuokra[^\d]*([\d\s]{2,8})\s*€\s*/\s*v", txt
+        )
+        lease_monthly_match = re.search(
+            r"[Tt]onttivuokra[^\d]*([\d\s]{2,6})\s*€\s*/\s*kk", txt
+        )
+
+        # Yhtiölaina — eksplisiittinen kenttä sivulla
+        debt_share_match = re.search(
+            r"(?:Yhtiölaina|Lainaosuus)[^\d]*([\d\s]{2,10})\s*€", txt
+        )
+
         # Ilmoitusteksti — ohita navigaatio (alkupää) ja anna iso siivu sivun tekstistä
-        # Oikotie-sivulla varsinainen sisältö alkaa tyypillisesti ~2000 merkin jälkeen
         description = txt[1500:5500] if len(txt) > 1500 else txt
 
         # Kaupunginosa ja postinumero — käytetään validointiin
@@ -228,6 +247,23 @@ def _scrape_detail(page, url: str) -> dict:
             result["_neighborhood"] = neighborhood_match.group(1).strip()
         if postal_match:
             result["_postal_code"] = postal_match.group(1)
+
+        # Tontti
+        if land_match:
+            raw = land_match.group(1).lower()
+            result["land_ownership"] = "vuokra" if "vuokra" in raw else "oma"
+        if lease_annual_match:
+            result["land_lease_fee_eur"] = round(_float(lease_annual_match.group(1)) / 12, 2)
+        elif lease_monthly_match:
+            result["land_lease_fee_eur"] = _float(lease_monthly_match.group(1))
+
+        # Yhtiölaina — eksplisiittinen tai laskennallinen
+        if debt_share_match:
+            result["share_of_debt_eur"] = _int(debt_share_match.group(1))
+        elif result.get("debt_free_price_eur") and debt_match:
+            # Lasketaan velaton - pyyntihinta (myöhemmin app.py:ssä kun price tiedetään)
+            result["_debt_free_for_calc"] = result["debt_free_price_eur"]
+
         result["_full_text"] = txt[:5000]
 
         return result

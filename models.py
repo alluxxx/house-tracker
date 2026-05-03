@@ -41,7 +41,10 @@ class Listing(db.Model):
     price_eur     = db.Column(db.Integer)                      # asking price in euros
     price_per_m2  = db.Column(db.Float)
     debt_free_price_eur = db.Column(db.Integer)                # velaton hinta
+    share_of_debt_eur   = db.Column(db.Integer)                # yhtiölaina €
     housing_fee_eur     = db.Column(db.Float)                  # vastike €/kk
+    land_ownership      = db.Column(db.String(16))             # "oma" | "vuokra" | None
+    land_lease_fee_eur  = db.Column(db.Float)                  # tonttivuokra €/kk (jos vuokratontti)
     condition     = db.Column(db.String(32))
     description   = db.Column(db.Text)
     analysis      = db.Column(db.JSON)          # Claude API output
@@ -69,6 +72,9 @@ class Listing(db.Model):
             "price_eur":     self.price_eur,
             "price_per_m2":  self.price_per_m2,
             "debt_free_price_eur": self.debt_free_price_eur,
+            "share_of_debt_eur":   self.share_of_debt_eur,
+            "land_ownership":      self.land_ownership,
+            "land_lease_fee_eur":  self.land_lease_fee_eur,
             "year_built":    self.year_built,
             "condition":     self.condition,
             "first_seen_at": self.first_seen_at.isoformat() if self.first_seen_at else None,
