@@ -434,6 +434,39 @@
       border-radius: 6px;
       border-left: 3px solid var(--blue);
     }
+
+    .tab-btn {
+      padding: 0.3rem 0.9rem;
+      border-radius: 6px;
+      border: 1px solid var(--border);
+      background: transparent;
+      color: var(--text-muted);
+      font-size: 0.78rem;
+      font-weight: 500;
+      cursor: pointer;
+      transition: all 0.15s;
+    }
+    .tab-btn:hover { color: var(--text); border-color: var(--blue); }
+    .tab-active { background: var(--blue); border-color: var(--blue); color: #fff !important; }
+
+    .stat-pill {
+      display: inline-flex;
+      align-items: center;
+      gap: 0.35rem;
+      padding: 0.3rem 0.7rem;
+      border-radius: 6px;
+      font-size: 0.75rem;
+      background: var(--surface2);
+      border: 1px solid var(--border);
+      color: var(--text-dim);
+    }
+    .stat-pill-green { background: rgba(16,185,129,0.1); border-color: rgba(16,185,129,0.25); color: var(--green); }
+    .stat-pill-amber { background: rgba(245,158,11,0.1); border-color: rgba(245,158,11,0.25); color: var(--amber); }
+    .stat-pill-red   { background: rgba(239,68,68,0.1);  border-color: rgba(239,68,68,0.25);  color: var(--red); }
+
+    .dom-fast   { color: var(--green); font-weight: 600; }
+    .dom-medium { color: var(--amber); font-weight: 600; }
+    .dom-slow   { color: var(--red);   font-weight: 600; }
   </style>
 </head>
 <body>
@@ -533,8 +566,21 @@
   <!-- Main -->
   <main class="main">
     <div class="table-header">
-      <span class="table-title">Aktiiviset kohteet</span>
+      <div style="display:flex;align-items:center;gap:0.75rem">
+        <button class="tab-btn tab-active" id="tabActive" onclick="switchTab('active')">Aktiiviset</button>
+        <button class="tab-btn" id="tabSold" onclick="switchTab('sold')">Poistuneet</button>
+      </div>
       <span class="count-badge" id="countLabel">{{ listings|length }} kohdetta</span>
+    </div>
+
+    <!-- Poistuneet stats bar -->
+    <div id="soldStats" style="display:none;gap:1rem;flex-wrap:wrap;padding:0.75rem 0;margin-bottom:0.5rem">
+      <div class="stat-pill" id="spTotal"></div>
+      <div class="stat-pill" id="spAvg"></div>
+      <div class="stat-pill" id="spMedian"></div>
+      <div class="stat-pill stat-pill-green" id="spFast"></div>
+      <div class="stat-pill stat-pill-amber" id="spMedium"></div>
+      <div class="stat-pill stat-pill-red" id="spSlow"></div>
     </div>
 
     <div class="table-wrap">
@@ -631,6 +677,31 @@
         </tbody>
       </table>
     </div>
+
+    <!-- Poistuneet-taulu (ladataan JS:llä) -->
+    <div class="table-wrap" id="soldTableWrap" style="display:none">
+      <table id="soldTable">
+        <thead>
+          <tr>
+            <th>Osoite</th>
+            <th>Tyyppi</th>
+            <th>H</th>
+            <th>m²</th>
+            <th>Hinta</th>
+            <th>€/m²</th>
+            <th>Vuosi</th>
+            <th>Kunto</th>
+            <th>Markkinalla</th>
+            <th>Poistunut</th>
+            <th>Src</th>
+          </tr>
+        </thead>
+        <tbody id="soldTableBody">
+          <tr><td colspan="11" style="text-align:center;color:var(--text-muted);padding:3rem">Ladataan…</td></tr>
+        </tbody>
+      </table>
+    </div>
+
   </main>
 </div>
 
@@ -788,6 +859,67 @@ function scrapeNow() {
   fetch("/api/scrape", {method: "POST"})
     .then(() => alert("Päivitys käynnistetty — odota ~2 min ja päivitä sivu."))
     .catch(() => alert("Virhe."));
+}
+
+// ── Välilehdet ──
+let soldLoaded = false;
+
+function switchTab(tab) {
+  const isActive = tab === 'active';
+  document.getElementById('tabActive').classList.toggle('tab-active', isActive);
+  document.getElementById('tabSold').classList.toggle('tab-active', !isActive);
+  document.getElementById('listingTable').closest('.table-wrap').style.display = isActive ? '' : 'none';
+  document.getElementById('soldTableWrap').style.display = isActive ? 'none' : '';
+  document.getElementById('soldStats').style.display = isActive ? 'none' : 'flex';
+  document.getElementById('countLabel').style.display = isActive ? '' : 'none';
+  if (!isActive && !soldLoaded) loadSold();
+}
+
+function loadSold() {
+  fetch('/api/listings/sold')
+    .then(r => r.json())
+    .then(data => {
+      soldLoaded = true;
+      const s = data.stats;
+      document.getElementById('spTotal').textContent   = `${s.total} kohdetta poistunut`;
+      document.getElementById('spAvg').textContent     = `Ka. markkinalla: ${s.avg_days_on_market ?? '–'}pv`;
+      document.getElementById('spMedian').textContent  = `Mediaani: ${s.median_days_on_market ?? '–'}pv`;
+      document.getElementById('spFast').textContent    = `⚡ Nopea (<14pv): ${s.fast}`;
+      document.getElementById('spMedium').textContent  = `~ Normaali (14–45pv): ${s.medium}`;
+      document.getElementById('spSlow').textContent    = `🐢 Hidas (>45pv): ${s.slow}`;
+
+      const tbody = document.getElementById('soldTableBody');
+      if (!data.listings.length) {
+        tbody.innerHTML = '<tr><td colspan="11" style="text-align:center;color:var(--text-muted);padding:3rem">Ei poistettuja kohteita vielä.</td></tr>';
+        return;
+      }
+
+      tbody.innerHTML = data.listings.map(l => {
+        const dom = l.days_on_market;
+        const domClass = dom === null ? '' : dom <= 14 ? 'dom-fast' : dom <= 45 ? 'dom-medium' : 'dom-slow';
+        const domLabel = dom !== null ? `${dom}pv` : '–';
+        const soldDate = l.sold_at ? l.sold_at.slice(0,10) : '–';
+        const price = l.price_eur ? l.price_eur.toLocaleString('fi-FI') + ' €' : '–';
+        const m2price = l.price_per_m2 ? Math.round(l.price_per_m2).toLocaleString('fi-FI') + ' €' : '–';
+        return `<tr>
+          <td><a class="listing-link" href="${l.url}" target="_blank">${l.address || '–'}</a></td>
+          <td>${l.property_type || '–'}</td>
+          <td>${l.rooms || '–'}</td>
+          <td>${l.size_m2 ? l.size_m2.toFixed(1) : '–'}</td>
+          <td>${price}</td>
+          <td>${m2price}</td>
+          <td>${l.year_built || '–'}</td>
+          <td>${l.condition || '–'}</td>
+          <td><span class="${domClass}">${domLabel}</span></td>
+          <td style="color:var(--text-muted)">${soldDate}</td>
+          <td><span class="src-badge src-${l.source}">${l.source}</span></td>
+        </tr>`;
+      }).join('');
+    })
+    .catch(() => {
+      document.getElementById('soldTableBody').innerHTML =
+        '<tr><td colspan="11" style="text-align:center;color:var(--red);padding:3rem">Latausvirhe.</td></tr>';
+    });
 }
 </script>
 </body>

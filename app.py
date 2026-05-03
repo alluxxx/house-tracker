@@ -378,6 +378,42 @@ def api_listings_all():
     return jsonify([l.to_dict() for l in all_listings])
 
 
+@app.route("/api/listings/sold")
+def api_listings_sold():
+    sold = (
+        Listing.query
+        .filter_by(is_active=False)
+        .filter(Listing.sold_at.isnot(None))
+        .filter(Listing.first_seen_at.isnot(None))
+        .order_by(desc(Listing.sold_at))
+        .all()
+    )
+    result = []
+    for l in sold:
+        days = (l.sold_at - l.first_seen_at).days if l.sold_at and l.first_seen_at else None
+        d = l.to_dict()
+        d["days_on_market"] = days
+        result.append(d)
+
+    total = len(result)
+    dom_values = [r["days_on_market"] for r in result if r["days_on_market"] is not None]
+    avg_dom = round(sum(dom_values) / len(dom_values)) if dom_values else None
+    sorted_dom = sorted(dom_values)
+    median_dom = sorted_dom[len(sorted_dom) // 2] if sorted_dom else None
+
+    return jsonify({
+        "listings": result,
+        "stats": {
+            "total": total,
+            "avg_days_on_market": avg_dom,
+            "median_days_on_market": median_dom,
+            "fast": sum(1 for d in dom_values if d <= 14),
+            "medium": sum(1 for d in dom_values if 14 < d <= 45),
+            "slow": sum(1 for d in dom_values if d > 45),
+        }
+    })
+
+
 @app.route("/api/stats")
 def api_stats():
     return jsonify(_get_stats())
